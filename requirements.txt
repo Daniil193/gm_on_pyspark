@@ -1,0 +1,5 @@
+pandas==1.1.5
+pyspark==2.4.7
+graphviz==0.16
+
+
