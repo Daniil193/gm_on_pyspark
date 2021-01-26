@@ -46,14 +46,13 @@ class Graph_miner:
         cls.result = cls.__get_curr_stat().join(cls.__get_time_stat(), on=[cls.payer, cls.recipient])
         
         recipient_count_expr = f.count(cls.recipient).over(Window.partitionBy(cls.recipient))
-        cls.result = cls.result.withColumn("r_count", recipient_count_expr)
+        cls.result = cls.result.withColumn("r_count", recipient_count_expr).toPandas()
         
-        cls.result.cache()
         
 class Painter:
     
     def __init__(self, init_graph):
-        self.df = init_graph.result.toPandas()
+        self.df = init_graph.result
         self.payer = init_graph.payer
         self.recipient = init_graph.recipient
         self.df_for_paint = None
