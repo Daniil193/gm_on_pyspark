@@ -64,12 +64,14 @@ class Painter:
             if a not in graph:
                 graph[a] = [b]
             else:
-                graph[a].append(b)
+                if b not in graph[a]:
+                    graph[a].append(b)
         for a, b in edgesess:
             if b not in graph:
                 graph[b] = [a]
             else:
-                graph[b].append(a)
+                if a not in graph[b]:
+                    graph[b].append(a)
         return graph
     
     def coherence(cls, vertex, visited, temp_visited, graph):
