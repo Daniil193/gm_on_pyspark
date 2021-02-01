@@ -58,42 +58,59 @@ class Painter:
         self.df_for_paint = None
         
     @staticmethod
-    def get_values_for_graph(edgesess): 
+    def get_values_for_graph(edges): 
         graph = {}
-        for a, b in edgesess:
+        for a, b in edges:
             if a not in graph:
                 graph[a] = [b]
             else:
                 if b not in graph[a]:
                     graph[a].append(b)
-        for a, b in edgesess:
             if b not in graph:
                 graph[b] = [a]
             else:
                 if a not in graph[b]:
-                    graph[b].append(a)
+                    graph[b].append(a)   
         return graph
     
-    def coherence(cls, vertex, visited, temp_visited, graph):
-        if vertex not in visited:
-            visited.append(vertex)
-            temp_visited.append(vertex)
-            for neighbor in graph[vertex]:
-                if neighbor not in visited:
-                    cls.coherence(neighbor, visited, temp_visited, graph)
-        return visited
+    @staticmethod
+    def strongly_connected_components_path(vertices, edges):
+        identified = set()
+        stack = []
+        index = {}
+        boundaries = []
 
-    def get_groups(cls, p_r_array):
-        neighborhoods = cls.get_values_for_graph(p_r_array)
-        nodes = set(p_r_array[:,0].tolist() + p_r_array[:,1].tolist())
+        def dfs(v):
+            index[v] = len(stack)
+            stack.append(v)
+            boundaries.append(index[v])
 
-        fully_con = []
-        visited = []
-        for vertex in nodes:
-            temp_visited = []
-            nodes_temp = cls.coherence(vertex, visited, temp_visited, neighborhoods)
-            fully_con.append(temp_visited)
-        return [i for i in fully_con if len(i) > 0]
+            for w in edges[v]:
+                if w not in index:
+                    for scc in dfs(w):
+                        yield scc
+                elif w not in identified:
+                    while index[w] < boundaries[-1]:
+                        boundaries.pop()
+
+            if boundaries[-1] == index[v]:
+                boundaries.pop()
+                scc = set(stack[index[v]:])
+                del stack[index[v]:]
+                identified.update(scc)
+                yield scc
+
+        for v in vertices:
+            if v not in index:
+                for scc in dfs(v):
+                    yield scc
+
+    def get_groups(cls, edges, len_groups = 1):
+        nodes = pd.unique(edges.ravel("K"))
+        links = cls.get_values_for_graph(edges)
+        groups = list(cls.strongly_connected_components_path(nodes, links))
+        return [i for i in groups if len(i) > len_groups]
+    
     
     def filtering_df(cls, sum_tresh=0, r_count_tresh=0, acc_name=None):
         cls.df_for_paint = cls.df
