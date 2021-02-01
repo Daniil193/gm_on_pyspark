@@ -19,6 +19,14 @@ class Graph_miner:
             self.__preprocess()
         
     def __get_time_stat(self):
+        """
+        Method calculating time statistic as median time between transaction, grouped by payer -> recip
+        
+        Input:
+              spark DataFrame with column [payer, recipient, date]
+        Output:
+              spark DataFrame grouped by [payer -> recip] on median time between transaction
+        """
         ww = Window.partitionBy([self.payer, self.recipient]).orderBy(self.date)
         lag_expr = f.lag(self.frame[self.date]).over(ww)
         self.frame = self.frame.withColumn("prev_time", lag_expr)
@@ -31,6 +39,14 @@ class Graph_miner:
         return self.frame.groupby([self.payer, self.recipient]).agg(magic_percentile)
     
     def __get_curr_stat(self):
+        """
+        Get statistic, such as sum of transaction [payer -> recip], total sum of [payer],
+                                % of total sum for current recip regarding all translations of payer
+        Input:
+              spark DataFrame with column [payer, recipient, sum of transaction]
+        Output:
+              spark DataFrame grouped by [payer -> recip] on sum transactions
+        """
         count_tr_expr = f.count(self.curr_sum).alias("freq")
         sum_tr_expr = f.round(f.sum(self.curr_sum),0).alias("summa")
         df_t = self.frame.groupby([self.payer, self.recipient]).agg(count_tr_expr, sum_tr_expr)
@@ -43,6 +59,13 @@ class Graph_miner:
         return df_t.withColumn("%_of_total_sum", pcnt_ttl_sum_expr)
     
     def __preprocess(cls):
+        """
+        Apply __get_time_stat and __get_curr_stat methods
+        Input:
+              spark DataFrame
+        Output:
+              pandas DataFrame
+        """
         cls.result = cls.__get_curr_stat().join(cls.__get_time_stat(), on=[cls.payer, cls.recipient])
         
         recipient_count_expr = f.count(cls.recipient).over(Window.partitionBy(cls.recipient))
@@ -58,7 +81,16 @@ class Painter:
         self.df_for_paint = None
         
     @staticmethod
-    def get_values_for_graph(edges): 
+    def get_values_for_graph(edges):
+        """
+        Search links between vertices
+        Input: 
+                edges: numpy.array - [[vertex_1, vertex_2],
+                                       [vertex_3, vertex_4],
+                                                     .......]
+        Output:
+                dict: {vertex_1: [vertex_2, vertex_5], .....}
+        """
         graph = {}
         for a, b in edges:
             if a not in graph:
@@ -75,6 +107,14 @@ class Painter:
     
     @staticmethod
     def strongly_connected_components_path(vertices, edges):
+        """
+        Find strongly connected groups of vertices
+        Input:
+              vertices: list -  [vertex_1, vertex_2, vertex_3, .......]
+              edges: dict - {vertex_1: [vertex_2, vertex_5], .....}
+        Output:
+             identified : generator of sets (groups)
+        """
         identified = set()
         stack = []
         index = {}
@@ -106,6 +146,16 @@ class Painter:
                     yield scc
 
     def get_groups(cls, edges, len_groups = 1):
+        """
+        Get independently groups from data
+        Input:
+              edges: numpy.array - [[vertex_1, vertex_2],
+                                       [vertex_3, vertex_4],
+                                                     .......]
+              len_groups: int - for filter of short group
+        Output:
+              : list of sets - [{vertex_3, vertex_4}, ....]
+        """
         nodes = pd.unique(edges.ravel("K"))
         links = cls.get_values_for_graph(edges)
         groups = list(cls.strongly_connected_components_path(nodes, links))
@@ -113,6 +163,11 @@ class Painter:
     
     
     def filtering_df(cls, sum_tresh=0, r_count_tresh=0, acc_name=None):
+        """
+        Method filtering of DataFrame by tresholds or account name
+        Input: pandas DataFrame
+        Output: None
+        """
         cls.df_for_paint = cls.df
         if acc_name is not None:
             groups = cls.get_groups(cls.df_for_paint[[cls.payer, cls.recipient]].values)
@@ -131,9 +186,19 @@ class Painter:
                                                                "smoothing":"spring",
                                                                "levels":"2"}):
         
+        """
+        Drawing data with Graphviz
+        Input:
+               : pandas DataFrame
+               filename: str - name for result pdf-file
+               engine: str - Graphviz engine for drawing
+               attributes: dict - attr for the chosen engine
+        Output:
+               None: generating of pdf-file
+        """
         if self.df_for_paint is None:
             self.df_for_paint = self.df
-        edges = self.df_for_paint[["Payer", "Recipient"]].values
+        edges = self.df_for_paint[[self.payer, self.recipient]].values
         counts = self.df_for_paint["freq"].values
         sums = self.df_for_paint["summa"].values.astype(int)
         percent = self.df_for_paint["%_of_total_sum"].values
